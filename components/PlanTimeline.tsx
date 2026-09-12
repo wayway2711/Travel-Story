@@ -1,15 +1,10 @@
 "use client";
 
-// 规划页左侧：按 Day 分组的时间线。
-// - 每个 stop 一张卡片：图标 / 名称 / 城市 / 类型 / 素材上传 / 删除
-// - stop 之间是紧凑的交通方式选择器（当前项小胶囊，点开弹九宫格面板）
-// - 支持拖拽排序（同 Day 内）与跨 Day 移动（拖到另一个 Day 的列表）
-// - 每个 Day 底部「+ 添加地点」
-
 import { useEffect, useRef, useState } from "react";
 import { PlaceSearch } from "./PlaceSearch";
 import { LandmarkGlyph } from "./LandmarkMarker";
 import { StopMedia } from "./StopMedia";
+import { VisitMemory } from "./VisitMemory";
 import { landmark, refineType } from "@/lib/landmark";
 import { TRANSPORT_META, STOP_TYPE_LABEL } from "@/lib/types";
 import type { Transport, Trip, TripStop } from "@/lib/types";
@@ -28,6 +23,7 @@ export function PlanTimeline({
   onHoverSearch,
   onAddMedia,
   onRemoveMedia,
+  onUpdateStopMemory,
 }: {
   trip: Trip;
   selectedStopId?: string | null;
@@ -41,6 +37,10 @@ export function PlanTimeline({
   onHoverSearch?: (r: import("@/lib/types").SearchResult | null) => void;
   onAddMedia?: (stopId: string, files: File[]) => void;
   onRemoveMedia?: (stopId: string, mediaId: string) => void;
+  onUpdateStopMemory?: (
+    stopId: string,
+    patch: Pick<TripStop, "visitedAt" | "note">
+  ) => void;
 }) {
   const [addingForDay, setAddingForDay] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -93,7 +93,6 @@ export function PlanTimeline({
               {stops.map((stop, i) => {
                 const seg = segByFrom.get(stop.id);
                 const spec = landmark.match(stop.name, stop.type);
-                const isLast = i === stops.length - 1 && day === trip.days[trip.days.length - 1];
                 return (
                   <li key={stop.id}>
                     <div
@@ -103,9 +102,7 @@ export function PlanTimeline({
                       onDragEnd={() => setDragId(null)}
                       onClick={() => onSelectStop(stop)}
                     >
-                      <span className="stop-handle" title="拖动排序">
-                        ⋮⋮
-                      </span>
+                      <span className="stop-handle" title="拖动排序">⋮⋮</span>
                       <span className="stop-glyph">
                         <LandmarkGlyph icon={spec.icon} size={28} />
                       </span>
@@ -122,20 +119,20 @@ export function PlanTimeline({
                           e.stopPropagation();
                           onRemoveStop(stop.id);
                         }}
-                      >
-                        ×
-                      </button>
+                      >×</button>
                     </div>
 
-                    {/* 素材：图片/视频缩略图 + 上传（供日后生成纪录片用） */}
+                    <VisitMemory
+                      stop={stop}
+                      onSave={(patch) => onUpdateStopMemory?.(stop.id, patch)}
+                    />
+
                     <StopMedia
                       stop={stop}
                       onAddFiles={(files) => onAddMedia?.(stop.id, files)}
                       onRemove={(mediaId) => onRemoveMedia?.(stop.id, mediaId)}
                     />
 
-                    {/* 交通方式只在「同一天内还有下一个节点」时显示；
-                        每天的最后一个节点不翻篇到明天，后面没有了就不显示 */}
                     {seg && i < stops.length - 1 && (
                       <div className="segment">
                         <div className="segment-line" />
@@ -146,7 +143,6 @@ export function PlanTimeline({
                         <div className="segment-line" />
                       </div>
                     )}
-                    {isLast && null}
                   </li>
                 );
               })}
@@ -172,24 +168,12 @@ export function PlanTimeline({
         );
       })}
 
-      <button className="add-day-btn" onClick={onAddDay}>
-        ＋ 添加一天
-      </button>
+      <button className="add-day-btn" onClick={onAddDay}>＋ 添加一天</button>
     </div>
   );
 }
 
-/**
- * 紧凑交通方式选择器：默认只占一颗小胶囊（当前方式），
- * 点击弹出 4 列网格面板展示全部选项，选完/点外面自动收起。
- */
-function TransportPicker({
-  value,
-  onChange,
-}: {
-  value: Transport;
-  onChange: (t: Transport) => void;
-}) {
+function TransportPicker({ value, onChange }: { value: Transport; onChange: (t: Transport) => void }) {
   const [open, setOpen] = useState(false);
   const [dir, setDir] = useState<"up" | "down">("up");
   const ref = useRef<HTMLDivElement>(null);
@@ -203,11 +187,10 @@ function TransportPicker({
     return () => document.removeEventListener("mousedown", onDocDown);
   }, [open]);
 
-  // 面板高约 250px：比上下两侧空间，哪边够往哪边开；都不够就往大的那边开
   const toggle = () => {
     if (!open && ref.current) {
       const rect = ref.current.getBoundingClientRect();
-      const spaceUp = rect.top - 70; // 顶栏
+      const spaceUp = rect.top - 70;
       const spaceDown = window.innerHeight - rect.bottom - 12;
       setDir(spaceUp >= 270 || spaceUp >= spaceDown ? "up" : "down");
     }
