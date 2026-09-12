@@ -14,9 +14,10 @@ import {
   moveStop,
   setStopTransport,
   setSegmentRoute,
+  updateTrip,
 } from "@/lib/store";
 import { deleteMediaBlob, putMediaBlob } from "@/lib/media";
-import type { SearchResult, Transport } from "@/lib/types";
+import type { SearchResult, Transport, TripStop } from "@/lib/types";
 import { routing } from "@/lib/routing";
 import { TravelMap } from "@/components/TravelMap";
 import { PlanTimeline } from "@/components/PlanTimeline";
@@ -30,7 +31,6 @@ export default function TripPage() {
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
   const fetchingRef = useRef<Set<string>>(new Set());
 
-  // 后台异步拉取缺失的路段真实路线（car/walk 走 OSRM，plane 走大圆航线）
   useEffect(() => {
     if (!trip) return;
     let cancelled = false;
@@ -43,10 +43,7 @@ export default function TripPage() {
       routing
         .getRoute([from.longitude, from.latitude], [to.longitude, to.latitude], seg.transport)
         .then((res) => {
-          if (cancelled) return;
-          // 只有权威路线（真实道路 / 飞机大圆 / 轮船直线）才持久化显示；
-          // OSRM 失败时的兜底直线不存，避免在规划图上画出误导性直线。
-          if (!res.authoritative) return;
+          if (cancelled || !res.authoritative) return;
           setSegmentRoute(trip.id, seg.fromStopId, {
             ...seg,
             route: res.route,
@@ -66,9 +63,7 @@ export default function TripPage() {
     return (
       <div className="notfound">
         <p>找不到这个行程。</p>
-        <Link href="/" className="btn">
-          返回首页
-        </Link>
+        <Link href="/" className="btn">返回首页</Link>
       </div>
     );
   }
@@ -98,7 +93,16 @@ export default function TripPage() {
     moveStop(trip!.id, stopId, targetDayId, targetIndex);
   }
 
-  /** 素材上传：二进制进 IndexedDB，元数据（含 kind 判定）进行程 */
+  function handleUpdateStopMemory(
+    stopId: string,
+    patch: Pick<TripStop, "visitedAt" | "note">
+  ) {
+    if (!trip) return;
+    updateTrip(trip.id, {
+      stops: trip.stops.map((stop) => (stop.id === stopId ? { ...stop, ...patch } : stop)),
+    });
+  }
+
   async function handleAddMedia(stopId: string, files: File[]) {
     if (!trip) return;
     for (const f of files) {
@@ -121,11 +125,9 @@ export default function TripPage() {
   function handleRemoveMedia(stopId: string, mediaId: string) {
     if (!trip) return;
     removeStopMedia(trip.id, stopId, mediaId);
-    // 元数据删成功后删掉服务端二进制
     deleteMediaBlob(mediaId).catch(() => {});
   }
 
-  /** 搜索结果悬停预览：飞到该地点；离开时回到行程取景 */
   function handleHoverSearch(r: SearchResult | null) {
     const engine = engineRef.current;
     if (!engine) return;
@@ -142,11 +144,9 @@ export default function TripPage() {
   return (
     <main className="plan">
       <header className="plan-topbar">
-        <Link href="/" className="topbar-back font-mono">
-          ← 所有旅行
-        </Link>
+        <Link href="/" className="topbar-back font-mono">← 所有旅行</Link>
         <div className="topbar-title">
-          <span className="font-mono kicker">PLAN</span>
+          <span className="font-mono kicker">MEMORIES</span>
           <h1 className="font-display">{trip.name}</h1>
         </div>
         <div className="topbar-actions">
@@ -154,18 +154,14 @@ export default function TripPage() {
             className="btn btn-ghost btn-sm"
             disabled={trip.stops.length < 2}
             onClick={() => router.push(`/trip/${trip.id}/record`)}
-            title={trip.stops.length < 2 ? "至少添加两个地点才能生成" : "把行程录制成纪录片视频"}
-          >
-            🎬 生成纪录片
-          </button>
+            title={trip.stops.length < 2 ? "至少添加两个地点才能生成" : "把旅行记录生成纪录片视频"}
+          >🎬 生成纪录片</button>
           <button
             className="btn topbar-play"
             disabled={trip.stops.length < 2}
             onClick={() => router.push(`/trip/${trip.id}/play`)}
-            title={trip.stops.length < 2 ? "至少添加两个地点才能播放" : "播放行程预览"}
-          >
-            ▶ 播放行程
-          </button>
+            title={trip.stops.length < 2 ? "至少添加两个地点才能播放" : "播放旅行足迹"}
+          >▶ 播放足迹</button>
         </div>
       </header>
 
@@ -184,6 +180,7 @@ export default function TripPage() {
             onHoverSearch={handleHoverSearch}
             onAddMedia={handleAddMedia}
             onRemoveMedia={handleRemoveMedia}
+            onUpdateStopMemory={handleUpdateStopMemory}
           />
         </aside>
 
@@ -195,7 +192,7 @@ export default function TripPage() {
             onStopClick={(s) => handleSelectStop(s.id)}
           />
           <div className="map-legend font-mono">
-            <span className="dot dot-traveled" /> 已规划路线
+            <span className="dot dot-traveled" /> 我们去过的地方
           </div>
         </section>
       </div>
