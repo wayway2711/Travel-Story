@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { TripStop } from "@/lib/types";
+import styles from "./VisitMemory.module.css";
 
 export function VisitMemory({
   stop,
@@ -26,8 +27,8 @@ export function VisitMemory({
   }
 
   return (
-    <div className="visit-memory" onClick={(e) => e.stopPropagation()}>
-      <label className="visit-memory-time">
+    <div className={styles.memory} onClick={(e) => e.stopPropagation()}>
+      <label className={styles.time}>
         <span className="font-mono muted">到访时间</span>
         <input
           type="datetime-local"
