@@ -22,14 +22,11 @@ export type Transport =
   | "scooter"
   | "walk"
   | "horse"
-  // 幻想/趣味交通（旅游要开心）
   | "ufo"
   | "swim"
   | "rocket";
 
-/** 地点类型（需求文档 §13 Level 1 分类，细分类版本：
- *  穷举每个景点不现实，但细分归类可以覆盖绝大多数：
- *  塔/高楼/建筑群/园林/森林/江河/海洋/寺庙/桥梁… 均按名称关键词命中，见 landmark.ts） */
+/** 地点类型 */
 export type StopType =
   | "attraction"
   | "museum"
@@ -44,7 +41,6 @@ export type StopType =
   | "restaurant"
   | "scenic"
   | "city"
-  // 细分类（第二梯队）
   | "tower"
   | "skyscraper"
   | "skyline"
@@ -77,6 +73,10 @@ export interface TripStop {
   type: StopType;
   /** Day 内排序（0-based） */
   order: number;
+  /** 实际到访时间，使用 datetime-local 兼容的本地时间字符串 */
+  visitedAt?: string;
+  /** 这一站的旅行回忆/备注 */
+  note?: string;
   /** 该地点上传的图片/视频素材元数据；二进制保存在服务端 data/media/ */
   media?: MediaMeta[];
 }
